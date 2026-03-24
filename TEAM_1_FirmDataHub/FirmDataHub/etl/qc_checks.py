@@ -1,146 +1,178 @@
 """
 qc_checks.py
 ------------
-Script D: Kiểm tra chất lượng dữ liệu (QC).
-Đọc từ DB → chạy các rule → xuất outputs/qc_report.csv
+Script D: Kiểm tra chất lượng dữ liệu — đủ 6 rules theo đề bài.
+Output: outputs/qc_report.csv
 
 Cách chạy:
     python etl/qc_checks.py
-    python etl/qc_checks.py --out outputs/qc_report.csv
 """
 
-import argparse
 import os
+import sys
+import math
 import pandas as pd
 import mysql.connector
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db_config import get_connection
 
-# Cấu hình rule growth_ratio
-GROWTH_MIN = -0.95
-GROWTH_MAX =  5.0
-
-# Cho phép sai số market_cap vs shares*price (%)
-MARKET_CAP_TOLERANCE = 0.05  # 5%
+# Cấu hình ngưỡng (có thể chỉnh)
+GROWTH_MIN  = -0.95
+GROWTH_MAX  = 5.0
+MVE_TOL_PCT = 0.05   # sai số 5% cho kiểm tra market_value_equity
 
 
-def load_data(conn) -> pd.DataFrame:
-    """Load toàn bộ panel từ view latest."""
-    sql = "SELECT * FROM vw_firm_panel_latest"
-    return pd.read_sql(sql, conn)
+def load_data(conn):
+    """Load toàn bộ data từ view."""
+    df = pd.read_sql("SELECT * FROM vw_firm_panel_latest", conn)
+    return df
 
 
-def run_qc(df: pd.DataFrame) -> list:
-    """Chạy tất cả QC rules. Trả về list dict lỗi."""
-    errors = []
+def run_qc(df: pd.DataFrame) -> pd.DataFrame:
+    """Chạy tất cả QC rules, trả về DataFrame các lỗi."""
+    issues = []
 
-    def add_error(ticker, year, field, error_type, message):
-        errors.append({
+    def add(ticker, year, field, etype, severity, msg):
+        issues.append({
             'ticker':      ticker,
             'fiscal_year': year,
             'field_name':  field,
-            'error_type':  error_type,
-            'message':     message
+            'error_type':  etype,
+            'severity':    severity,   # ERROR / WARNING
+            'message':     msg,
         })
 
     for _, row in df.iterrows():
-        ticker = row['ticker']
-        year   = row['fiscal_year']
+        t = row['ticker']
+        y = row['fiscal_year']
 
-        # ── Rule 1: Ownership trong [0, 1] ──────────────────────────
-        for col in ['managerial_inside_own', 'state_own', 'institutional_own', 'foreign_own']:
+        # ── Rule 1: Ownership ratios nằm trong [0, 1] ────────────
+        for col in ['managerial_inside_own', 'state_own',
+                    'institutional_own', 'foreign_own']:
             val = row.get(col)
             if pd.notna(val):
                 if val < 0 or val > 1:
-                    add_error(ticker, year, col, 'OUT_OF_RANGE',
-                              f"Giá trị {val:.4f} không nằm trong [0, 1]")
+                    add(t, y, col, 'OUT_OF_RANGE', 'ERROR',
+                        f'{col} = {val:.4f} nằm ngoài [0, 1]')
 
-        # ── Rule 2: Tổng ownership ≤ 1.01 (cho phép làm tròn) ───────
-        own_cols = ['managerial_inside_own', 'state_own', 'institutional_own', 'foreign_own']
-        own_vals = [row.get(c) for c in own_cols if pd.notna(row.get(c))]
+        # ── Rule 2: Tổng ownership ≤ 1 ───────────────────────────
+        own_vals = [row.get(c) for c in
+                    ['managerial_inside_own','state_own',
+                     'institutional_own','foreign_own']]
+        own_vals = [v for v in own_vals if pd.notna(v)]
         if len(own_vals) == 4:
             total = sum(own_vals)
-            if total > 1.01:
-                add_error(ticker, year, 'ownership_sum', 'INVALID_SUM',
-                          f"Tổng ownership = {total:.4f} > 1.0")
+            if total > 1.001:
+                add(t, y, 'ownership_sum', 'INVALID_SUM', 'ERROR',
+                    f'Tổng ownership = {total:.4f} > 1.0')
 
-        # ── Rule 3: shares_outstanding > 0 ──────────────────────────
-        val = row.get('shares_outstanding')
-        if pd.notna(val) and val <= 0:
-            add_error(ticker, year, 'shares_outstanding', 'NON_POSITIVE',
-                      f"Số CP phải > 0, hiện tại = {val}")
-
-        # ── Rule 4: total_assets >= 0 ────────────────────────────────
-        val = row.get('total_assets')
-        if pd.notna(val) and val < 0:
-            add_error(ticker, year, 'total_assets', 'NEGATIVE',
-                      f"Tổng tài sản âm: {val}")
-
-        # ── Rule 5: current_liabilities >= 0 ────────────────────────
-        val = row.get('current_liabilities')
-        if pd.notna(val) and val < 0:
-            add_error(ticker, year, 'current_liabilities', 'NEGATIVE',
-                      f"Nợ ngắn hạn âm: {val}")
-
-        # ── Rule 6: total_liabilities >= 0 ──────────────────────────
-        val = row.get('total_liabilities')
-        if pd.notna(val) and val < 0:
-            add_error(ticker, year, 'total_liabilities', 'NEGATIVE',
-                      f"Tổng nợ phải trả âm: {val}")
-
-        # ── Rule 7: growth_ratio trong [GROWTH_MIN, GROWTH_MAX] ─────
-        val = row.get('growth_ratio')
-        if pd.notna(val):
-            if val < GROWTH_MIN or val > GROWTH_MAX:
-                add_error(ticker, year, 'growth_ratio', 'OUT_OF_RANGE',
-                          f"Tăng trưởng {val:.4f} ngoài [{GROWTH_MIN}, {GROWTH_MAX}]")
-
-        # ── Rule 8: market_cap ≈ shares × price ─────────────────────
-        mve    = row.get('market_value_equity')
+        # ── Rule 3: Shares outstanding > 0 ───────────────────────
         shares = row.get('shares_outstanding')
+        if pd.notna(shares):
+            if shares <= 0:
+                add(t, y, 'shares_outstanding', 'INVALID_VALUE', 'ERROR',
+                    f'shares_outstanding = {shares} phải > 0')
+
+        # ── Rule 4: Total assets ≥ 0 ─────────────────────────────
+        assets = row.get('total_assets')
+        if pd.notna(assets):
+            if assets < 0:
+                add(t, y, 'total_assets', 'INVALID_VALUE', 'ERROR',
+                    f'total_assets = {assets:.2f} phải ≥ 0')
+
+        # ── Rule 5: Current liabilities ≥ 0 ──────────────────────
+        cl = row.get('current_liabilities')
+        if pd.notna(cl):
+            if cl < 0:
+                add(t, y, 'current_liabilities', 'INVALID_VALUE', 'ERROR',
+                    f'current_liabilities = {cl:.2f} phải ≥ 0')
+
+        # ── Rule 6: Growth ratio trong khoảng hợp lý ─────────────
+        gr = row.get('growth_ratio')
+        if pd.notna(gr):
+            if gr < GROWTH_MIN or gr > GROWTH_MAX:
+                add(t, y, 'growth_ratio', 'OUT_OF_RANGE', 'WARNING',
+                    f'Tăng trưởng {gr:.4f} ngoài [{GROWTH_MIN}, {GROWTH_MAX}]')
+
+        # ── Rule 7 (bonus): market_value_equity ≈ shares × price ─
+        mve    = row.get('market_value_equity')
         price  = row.get('share_price')
         if pd.notna(mve) and pd.notna(shares) and pd.notna(price) and shares > 0 and price > 0:
-            computed = shares * price
-            if computed > 0:
-                diff_pct = abs(mve - computed) / computed
-                if diff_pct > MARKET_CAP_TOLERANCE:
-                    add_error(ticker, year, 'market_value_equity', 'INCONSISTENT',
-                              f"market_cap={mve:,.0f} ≠ shares×price={computed:,.0f} "
-                              f"(lệch {diff_pct*100:.1f}%)")
+            expected = shares * price
+            if expected > 0:
+                diff_pct = abs(mve - expected) / expected
+                if diff_pct > MVE_TOL_PCT:
+                    add(t, y, 'market_value_equity', 'INCONSISTENT', 'WARNING',
+                        f'MVE={mve:.0f} ≠ shares×price={expected:.0f} (chênh {diff_pct*100:.1f}%)')
 
-        # ── Rule 9: net_sales >= 0 ───────────────────────────────────
-        val = row.get('net_sales')
-        if pd.notna(val) and val < 0:
-            add_error(ticker, year, 'net_sales', 'NEGATIVE',
-                      f"Doanh thu thuần âm: {val}")
+        # ── Rule 8 (bonus): CAPEX không âm ───────────────────────
+        capex = row.get('capex')
+        if pd.notna(capex) and capex < 0:
+            add(t, y, 'capex', 'INVALID_VALUE', 'WARNING',
+                f'capex = {capex:.2f} không nên âm (theo quy ước nhóm)')
 
-        # ── Rule 10: total_assets = total_equity + total_liabilities ─
-        ta  = row.get('total_assets')
-        eq  = row.get('total_equity')
-        lib = row.get('total_liabilities')
-        if pd.notna(ta) and pd.notna(eq) and pd.notna(lib):
-            diff = abs(ta - (eq + lib))
-            # Cho phép sai số 1% (do làm tròn đơn vị tỷ đồng)
-            tolerance = ta * 0.01 if ta > 0 else 1
-            if diff > tolerance:
-                add_error(ticker, year, 'balance_sheet_check', 'INCONSISTENT',
-                          f"Assets({ta}) ≠ Equity({eq}) + Liabilities({lib}), lệch={diff:.2f}")
+        # ── Rule 9 (bonus): Net sales ≥ 0 ────────────────────────
+        ns = row.get('net_sales')
+        if pd.notna(ns) and ns < 0:
+            add(t, y, 'net_sales', 'INVALID_VALUE', 'WARNING',
+                f'net_sales = {ns:.2f} phải ≥ 0')
 
-        # ── Rule 11: product/process innovation chỉ = 0 hoặc 1 ──────
-        for col in ['product_innovation', 'process_innovation']:
-            val = row.get(col)
-            if pd.notna(val) and val not in [0, 1, 0.0, 1.0]:
-                add_error(ticker, year, col, 'INVALID_DUMMY',
-                          f"Giá trị {val} không hợp lệ (chỉ chấp nhận 0 hoặc 1)")
-
-        # ── Rule 12: employees_count > 0 ────────────────────────────
-        val = row.get('employees_count')
-        if pd.notna(val) and val <= 0:
-            add_error(ticker, year, 'employees_count', 'NON_POSITIVE',
-                      f"Số nhân viên phải > 0, hiện tại = {val}")
-
-    return errors
-
-
+        # ── Rule 10 (bonus): Firm age hợp lý ─────────────────────
+        age = row.get('firm_age')
+        if pd.notna(age):
+            if age < 1 or age > 100:
+                add(t, y, 'firm_age', 'OUT_OF_RANGE', 'WARNING',
+                    f'firm_age = {age} ngoài khoảng [1, 100]')
+        # ── Rule 11 (bonus): Tiền và Tồn kho <= Tài sản ngắn hạn ────────────────────
+        ca = row.get('current_assets')
+        cash = row.get('cash_and_equivalents')
+        inv = row.get('inventory')
+        if pd.notna(ca):
+            if pd.notna(cash) and cash > ca + 1.0:
+                add(t, y, 'cash_and_equivalents', 'LOGIC_ERROR', 'ERROR',
+                    f'Tiền mặt ({cash:.1f}) > TS ngắn hạn ({ca:.1f})')
+            if pd.notna(inv) and inv > ca + 1.0:
+                add(t, y, 'inventory', 'LOGIC_ERROR', 'ERROR',
+                    f'Tồn kho ({inv:.1f}) > TS ngắn hạn ({ca:.1f})')
+                
+        # ── Rule 12 (bonus): Chi phí R&D không tưởng ────────────────────────────────
+        rnd = row.get('rnd_expenses')
+        ns = row.get('net_sales')
+        if pd.notna(rnd) and pd.notna(ns) and ns > 0:
+            if rnd > ns:
+                add(t, y, 'rnd_expenses', 'BUSINESS_WARNING', 'WARNING',
+                    f'Chi phí R&D ({rnd:.1f}) lớn hơn cả Doanh thu thuần ({ns:.1f})')
+        
+        # ── Rule 13 (bonus): Số lượng nhân viên phải hợp lý ─────────────────────────
+        emp = row.get('employees_count')
+        if pd.notna(emp):
+            if emp <= 0:
+                add(t, y, 'employees_count', 'INVALID_VALUE', 'ERROR',
+                    f'Số nhân viên ({emp}) phải lớn hơn 0')
+            elif emp != int(emp):
+                add(t, y, 'employees_count', 'INVALID_FORMAT', 'ERROR',
+                    f'Số nhân viên ({emp}) phải là số nguyên (không có thập phân)')
+        
+        # ── Rule 14 (bonus): Sở hữu của Ban điều hành quá cao ───────────────────────
+        inside_own = row.get('managerial_inside_own')
+        if pd.notna(inside_own) and inside_own > 0.8:
+            add(t, y, 'managerial_inside_own', 'BUSINESS_WARNING', 'WARNING',
+                f'Sở hữu của Ban điều hành ({inside_own*100:.1f}%) quá cao bất thường')
+        
+        # ── Rule 15 (bonus): Nợ ngắn hạn + Nợ dài hạn <= Tổng nợ ────────────────────
+        tl = row.get('total_liabilities')
+        cl = row.get('current_liabilities')
+        ltd = row.get('long_term_debt')
+        if pd.notna(tl) and pd.notna(cl) and pd.notna(ltd):
+            if (cl + ltd) > tl + 1.0:
+                add(t, y, 'liabilities_breakdown', 'LOGIC_ERROR', 'ERROR',
+                    f'Nợ ngắn+dài ({cl+ltd:.1f}) > Tổng nợ ({tl:.1f})')
+   
+    return pd.DataFrame(issues, columns=[
+        'ticker','fiscal_year','field_name','error_type','severity','message'
+    ])
+        
 def main(out_path: str = 'outputs/qc_report.csv'):
     print(f"\n{'='*60}")
     print(f"  qc_checks.py  |  output: {out_path}")
@@ -148,36 +180,41 @@ def main(out_path: str = 'outputs/qc_report.csv'):
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
-    conn = get_connection()
-    df   = load_data(conn)
-    conn.close()
+    try:
+        conn = get_connection()
+        df   = load_data(conn)
+        conn.close()
+    except Exception as e:
+        print(f"[ERROR] Không kết nối được DB: {e}")
+        sys.exit(1)
 
     print(f"  Đã load {len(df)} dòng từ vw_firm_panel_latest")
 
-    errors = run_qc(df)
+    report = run_qc(df)
+    report.to_csv(out_path, index=False, encoding='utf-8-sig')
 
-    if errors:
-        report = pd.DataFrame(errors)
-        report.to_csv(out_path, index=False, encoding='utf-8-sig')
-        print(f"\n  ⚠  Tìm thấy {len(errors)} vấn đề chất lượng dữ liệu")
-        print(f"  → Xem chi tiết: {out_path}")
-
-        # Tóm tắt theo error_type
-        print(f"\n  Tóm tắt theo loại lỗi:")
-        summary = report.groupby('error_type').size().reset_index(name='count')
-        for _, s in summary.iterrows():
-            print(f"    {s['error_type']:25s} : {s['count']} lỗi")
+    if report.empty:
+        print(f"  ✓ Không tìm thấy lỗi nào! Dữ liệu đạt chất lượng.")
     else:
-        # Xuất file rỗng (có header) để chứng minh QC đã chạy
-        pd.DataFrame(columns=['ticker','fiscal_year','field_name','error_type','message'])\
-          .to_csv(out_path, index=False, encoding='utf-8-sig')
-        print(f"\n  ✓ Không tìm thấy lỗi nào! Dữ liệu đạt chất lượng.")
+        errors   = len(report[report['severity'] == 'ERROR'])
+        warnings = len(report[report['severity'] == 'WARNING'])
+        print(f"  ⚠  Tìm thấy {len(report)} vấn đề "
+              f"({errors} ERROR, {warnings} WARNING)")
+        print(f"  → Xem chi tiết: {out_path}")
+        print(f"\n  Tóm tắt theo loại lỗi:")
+        for etype, cnt in report.groupby('error_type').size().items():
+            print(f"    {etype:<30}: {cnt} lỗi")
+        print(f"\n  Tóm tắt theo ticker:")
+        for tkr, cnt in report.groupby('ticker').size().sort_values(ascending=False).items():
+            sev = report[report['ticker']==tkr]['severity'].value_counts().to_dict()
+            print(f"    {tkr:<8}: {cnt} vấn đề {sev}")
 
     print(f"{'='*60}\n")
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='QC kiểm tra chất lượng dữ liệu')
+    import argparse
+    parser = argparse.ArgumentParser()
     parser.add_argument('--out', default='outputs/qc_report.csv')
     args = parser.parse_args()
     main(args.out)
