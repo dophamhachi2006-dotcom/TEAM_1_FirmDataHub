@@ -1,16 +1,28 @@
-# TEAM_X_FirmDataHub
+# TEAM_1_FirmDataHub
 ## Firm Data Hub — Vietnamese Listed Companies Data Warehouse (2020–2024)
+
+> A centralized data warehouse system for storing, validating, versioning, and exporting panel data of 20 Vietnamese listed companies across 5 fiscal years (2020–2024). The system implements a DIM + FACT + SNAPSHOT architecture in MySQL, with a fully automated Python ETL pipeline covering data import, quality control, and clean dataset export.
+
+---
+
+## Project Links
+
+| Resource | Link |
+|----------|------|
+| 📁 Google Drive | [Data & Outputs](https://drive.google.com/drive/folders/1nyb7k94UrB86AAAZ2pCeSYMmFfcq6yuG?usp=sharing) |
+| 💻 GitHub Repository | [TEAM_1_FirmDataHub](https://github.com/dophamhachi2006-dotcom/TEAM_1_FirmDataHub.git) |
 
 ---
 
 ## Team Members
 
-| Full Name | Student ID | Role | Contribution |
-|-----------|------------|------|--------------|
-| | | | |
-| | | | |
-| | | | |
-| | | | |
+| Full Name | Student ID | Role | Contribution (%) | Detailed Contribution |
+|-----------|------------|------|------------------|-----------------------|
+| Đỗ Phạm Hà Chi | 11245851 | Lead, Data Collection, Database Design, Pipeline Enhancement | 30% | As the team lead, responsible for overall project coordination, data collection, and database schema design. Enhanced `run_pipeline.py` to automate the entire ETL workflow. Participated in the development of all ETL modules including `import_firms.py`, `create_snapshot.py`, `import_panel.py`, `qc_checks.py`, and `export_panel.py`. |
+| Trần Phương Linh | 11223797 | Data Collection, Snapshot Management, SQL Schema, Pipeline Refinement | 24% | Contributed to data collection and refinement of `create_snapshot.py` to ensure proper versioning and snapshot tracking. Assisted in designing and refining `schema_and_seed.sql` for database structure. Enhanced `run_pipeline.py` for improved workflow execution. |
+| Nguyễn Thị Dương | 11245866 | Data Collection, View Development, Quality Control | 23.3% | Focused on data collection and validation. Developed and refined database views (including `vw_firm_panel_latest`) to support analytical queries. Enhanced `qc_checks.py` by implementing 15 comprehensive data quality rules and generating quality reports. |
+| Trần Thị Nhật Khánh | 11245886 | Data Collection, Snapshot Management | 22.7% | Responsible for data collection and validation. Contributed to the development and refinement of `create_snapshot.py`, ensuring proper snapshot creation and linkage with data sources. Supported versioning implementation across the pipeline. |
+| **Total** | | | **100%** | |
 
 ---
 
@@ -22,7 +34,7 @@ INN, SMC, CLC, DNP, KSB, VFG, CLL, DPR, NNC, WCS
 
 ## Project Structure
 ```
-TEAM_X_FirmDataHub/
+TEAM_1_FirmDataHub/
 ├── sql/
 │   ├── schema_and_seed.sql       # Creates DB, all tables, seeds 20 firms
 │   └── views.sql                 # Creates view vw_firm_panel_latest
@@ -162,7 +174,9 @@ LIMIT 10;
 ## Data Notes
 - **Currency unit**: billion VND (VND × 10⁹) in exported CSV; DB stores raw VND (unit_scale = 1,000,000,000)
 - **Ownership**: decimal ratio 0–1 (e.g. 5% = 0.05)
-- **growth_ratio**: NULL for fiscal year 2020 (no prior year to compute)
+- **growth_ratio**: computed as (net_sales_t − net_sales_t-1) / net_sales_t-1; year 2020 uses 2019 comparative figures from the 2020 audited financial statements
+- **dividend_cash_paid**: recorded as negative values following Vietnamese cash flow statement convention (cash outflows shown in parentheses); the absolute value represents actual dividends paid to shareholders
+- **R&D expenditure**: NULL for all firms — none of the 20 companies reported formal R&D expenditure in their audited financial statements during 2020–2024
 - **CAPEX**: Net CAPEX = |cash paid for fixed assets| − proceeds from disposals; floored at 0 per group convention
 - **institutional_own**: excludes state ownership to avoid double-counting
 - Some variables are NULL for service/transport firms (WCS, CLL, SFI): merchandise_purchase, WIP — not applicable to their business model

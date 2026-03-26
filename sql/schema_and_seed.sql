@@ -1,14 +1,6 @@
 -- ============================================================
 -- FIRM DATA HUB — schema_and_seed.sql
--- Dựa theo cấu trúc chuẩn vn_firm_panel.sql
--- 
 -- MỤC ĐÍCH: Tạo DB + seed dữ liệu mẫu TEST để kiểm tra
---           Dùng được cho MỌI nhóm — không hard-code ticker
---
--- SAU KHI CHẠY FILE NÀY:
---   - Chạy import_firms.py  → để nạp 20 công ty của nhóm
---   - Chạy create_snapshot.py → tạo snapshot
---   - Chạy import_panel.py  → nạp 38 biến
 -- ============================================================
 
 CREATE DATABASE IF NOT EXISTS vn_firm_hub
@@ -159,8 +151,6 @@ CREATE TABLE fact_data_snapshot (
   CONSTRAINT fk_snapshot_source FOREIGN KEY (source_id) REFERENCES dim_data_source(source_id)
 ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Snapshots sẽ được tạo tự động khi chạy run_pipeline.py (create_snapshot.py)
--- Không seed snapshot cứng ở đây nữa
 
 -- ============================================================
 -- 6. fact_ownership_year
@@ -181,8 +171,6 @@ CREATE TABLE fact_ownership_year (
   CONSTRAINT fk_own_firm     FOREIGN KEY (firm_id)     REFERENCES dim_firm(firm_id),
   CONSTRAINT fk_own_snapshot FOREIGN KEY (snapshot_id) REFERENCES fact_data_snapshot(snapshot_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Không seed cứng — data sẽ được import qua import_panel.py
 
 -- ============================================================
 -- 7. fact_financial_year
@@ -224,8 +212,6 @@ CREATE TABLE fact_financial_year (
   CONSTRAINT fk_fin_snapshot FOREIGN KEY (snapshot_id) REFERENCES fact_data_snapshot(snapshot_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Không seed cứng — data sẽ được import qua import_panel.py
-
 -- ============================================================
 -- 8. fact_cashflow_year
 -- ============================================================
@@ -245,8 +231,6 @@ CREATE TABLE fact_cashflow_year (
   CONSTRAINT fk_cf_firm     FOREIGN KEY (firm_id)     REFERENCES dim_firm(firm_id),
   CONSTRAINT fk_cf_snapshot FOREIGN KEY (snapshot_id) REFERENCES fact_data_snapshot(snapshot_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Không seed cứng — data sẽ được import qua import_panel.py
 
 -- ============================================================
 -- 9. fact_market_year
@@ -271,8 +255,6 @@ CREATE TABLE fact_market_year (
   CONSTRAINT fk_mkt_snapshot FOREIGN KEY (snapshot_id) REFERENCES fact_data_snapshot(snapshot_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Không seed cứng — data sẽ được import qua import_panel.py
-
 -- ============================================================
 -- 10. fact_innovation_year
 -- ============================================================
@@ -294,7 +276,6 @@ CREATE TABLE fact_innovation_year (
   CONSTRAINT fk_innov_source   FOREIGN KEY (evidence_source_id) REFERENCES dim_data_source(source_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Không seed cứng — data sẽ được import qua import_panel.py
 
 -- ============================================================
 -- 11. fact_firm_year_meta

@@ -24,7 +24,7 @@ SELECT
     f.company_name,
     e.exchange_code,
     i.industry_l2_name,
-    base.fiscal_year,   -- SỬA Ở ĐÂY: Dùng năm của xương sống thay vì của bảng Financial
+    base.fiscal_year,   
     fy.unit_scale,
 
     -- (1-4) Ownership
@@ -102,7 +102,7 @@ JOIN dim_exchange e
 LEFT JOIN dim_industry_l2 i 
     ON i.industry_l2_id = f.industry_l2_id
 
--- Financial (Giờ đã bị giáng cấp xuống LEFT JOIN, bình đẳng như các bảng khác)
+-- Financial 
 LEFT JOIN fact_financial_year fy
     ON fy.firm_id = base.firm_id 
     AND fy.fiscal_year = base.fiscal_year
