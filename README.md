@@ -9,7 +9,7 @@
 
 | Resource | Link |
 |----------|------|
-| 📁 Google Drive | [[TEAM_1_FirmDataHub](https://drive.google.com/drive/folders/1nyb7k94UrB86AAAZ2pCeSYMmFfcq6yuG?usp=sharing) |
+| 📁 Google Drive | [TEAM_1_FirmDataHub](https://drive.google.com/drive/folders/1nyb7k94UrB86AAAZ2pCeSYMmFfcq6yuG?usp=sharing) |
 | 💻 GitHub Repository | [TEAM_1_FirmDataHub](https://github.com/dophamhachi2006-dotcom/TEAM_1_FirmDataHub.git) |
 
 ---
