@@ -27,7 +27,7 @@ TEAM_X_FirmDataHub/
 │   ├── schema_and_seed.sql       # Creates DB, all tables, seeds 20 firms
 │   └── views.sql                 # Creates view vw_firm_panel_latest
 ├── etl/
-│   ├── db_config.py              # MySQL connection config (reads from .env)
+│   ├── db_config.py              # MySQL connection config
 │   ├── import_firms.py           # Script A: Import/update firm directory
 │   ├── create_snapshot.py        # Script B: Create version snapshots
 │   ├── import_panel.py           # Script C: Import 38 variables into FACT tables
@@ -49,14 +49,13 @@ TEAM_X_FirmDataHub/
 
 ## Requirements
 - Python 3.8+
-- MySQL 8.0+
-- MySQL Workbench
+- MySQL 8.0+ (running on localhost)
 
 ---
 
 ## How to Run
 
-### Step 1 — Install Python Dependencies
+### Step 1 — Install Python dependencies
 
 ```bash
 # Create and activate virtual environment (recommended)
@@ -71,62 +70,34 @@ pip install -r requirements.txt
 
 ---
 
-### Step 2 — Initialize the Database
-
-> ⚠️ If you have an existing database from a previous run, drop it first in MySQL Workbench:
-> ```sql
-> DROP DATABASE IF EXISTS vn_firm_hub;
-> ```
-
-**2a. Run schema_and_seed.sql**
-
-Open MySQL Workbench → File → Open SQL Script → select `sql/schema_and_seed.sql`
-→ Press **Ctrl+A** to select all → Press **Ctrl+Shift+Enter** to execute.
-
-Verify:
-```sql
-SELECT COUNT(*) FROM dim_firm;      -- expected: 20
-SELECT COUNT(*) FROM dim_exchange;  -- expected: 3
-```
-
-**2b. Run views.sql**
-
-Open `sql/views.sql` → Ctrl+A → Ctrl+Shift+Enter.
-
-Verify:
-```sql
-SHOW FULL TABLES IN vn_firm_hub WHERE TABLE_TYPE = 'VIEW';
--- expected: vw_firm_panel_latest
-```
-
----
-
-### Step 3 — Run the Pipeline
+### Step 2 — Run the pipeline
 
 ```bash
 python run_pipeline.py
 ```
 
-The pipeline will prompt for your MySQL password at startup — no `.env` file needed:
+The pipeline will prompt for your MySQL password once at startup:
 
 ```
   Nhập password MySQL (user: root): _
 ```
 
-The pipeline runs automatically in order:
+Then it runs all steps automatically — **no need to open MySQL Workbench**:
 
-| Step | Script | Description |
-|------|--------|-------------|
-| A | import_firms.py | Import/update 20 firms into dim_firm |
-| B | create_snapshot.py | Create 15 snapshots (3 sources × 5 years) |
-| C | import_panel.py | Import 100 rows × 38 variables into FACT tables |
-| D | qc_checks.py | Run 15 QC rules → outputs/qc_report.csv |
-| E | export_panel.py | Export clean dataset → outputs/panel_latest.csv |
+| Step | Description |
+|------|-------------|
+| 0a | Run `schema_and_seed.sql` — create DB, all tables, seed 20 firms |
+| 0b | Run `views.sql` — create `vw_firm_panel_latest` |
+| A  | Import/update 20 firms into `dim_firm` |
+| B  | Create 15 snapshots (3 sources × 5 years) |
+| C  | Import 100 rows × 38 variables into FACT tables |
+| D  | Run 15 QC rules → `outputs/qc_report.csv` |
+| E  | Export clean dataset → `outputs/panel_latest.csv` |
 
 **Other run options:**
 
 ```bash
-# Reset the entire DB then re-run from scratch
+# Drop existing DB and re-run everything from scratch
 python run_pipeline.py --reset
 
 # Skip import steps (only run QC + export)
@@ -135,7 +106,7 @@ python run_pipeline.py --skip-import
 
 ---
 
-### Step 4 — Verify Results
+### Step 3 — Verify Results
 
 | Output file | Expected |
 |-------------|----------|
@@ -144,19 +115,11 @@ python run_pipeline.py --skip-import
 
 Quick checks in MySQL Workbench:
 ```sql
--- Panel row count (expected: 100)
-SELECT COUNT(*) FROM vw_firm_panel_latest;
+SELECT COUNT(*) FROM vw_firm_panel_latest;   -- expected: 100
 
--- Preview data
 SELECT ticker, fiscal_year, net_sales, total_assets, net_income
 FROM vw_firm_panel_latest
 LIMIT 10;
-
--- Snapshot summary (expected: 15)
-SELECT ds.source_name, fds.fiscal_year, fds.version_tag
-FROM fact_data_snapshot fds
-JOIN dim_data_source ds ON ds.source_id = fds.source_id
-ORDER BY ds.source_name, fds.fiscal_year;
 ```
 
 ---

@@ -3,7 +3,7 @@
 -- Tạo view vw_firm_panel_latest
 -- Chạy file này sau khi đã chạy schema_and_seed.sql
 -- ============================================================
-DROP DATABASE IF EXISTS vn_firm_hub;
+
 USE vn_firm_hub;
 
 CREATE OR REPLACE VIEW vw_firm_panel_latest AS
@@ -161,17 +161,3 @@ WHERE f.status = 'active'
 
 ORDER BY f.ticker, base.fiscal_year;
 
-show tables;
-DESC dim_data_source;
-SELECT * FROM dim_firm;
-SELECT * FROM dim_industry_l2;
-SELECT * FROM dim_exchange;
-SELECT * FROM dim_data_source;
-SELECT * FROM fact_financial_year;
-SELECT * FROM fact_cashflow_year;
-SELECT * FROM fact_market_year;
-SELECT * FROM fact_ownership_year;
-SELECT * FROM fact_innovation_year;
-SELECT * FROM fact_firm_year_meta;
-SELECT * FROM fact_data_snapshot;
-SELECT * FROM fact_value_override_log;
