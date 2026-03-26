@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
+
+# Môi trường
+.env
+
+# Output (không commit vào git, tự sinh khi chạy pipeline)
+outputs/qc_report.csv
+outputs/panel_latest.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
