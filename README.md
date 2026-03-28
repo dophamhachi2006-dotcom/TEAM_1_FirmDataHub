@@ -9,7 +9,7 @@
 
 | Resource | Link |
 |----------|------|
-| 📁 Google Drive | [TEAM_1_FirmDataHub](https://drive.google.com/drive/folders/1nyb7k94UrB86AAAZ2pCeSYMmFfcq6yuG?usp=sharing) |
+| 📁 Google Drive | [Data & Outputs](https://drive.google.com/drive/folders/1nyb7k94UrB86AAAZ2pCeSYMmFfcq6yuG?usp=sharing) |
 | 💻 GitHub Repository | [TEAM_1_FirmDataHub](https://github.com/dophamhachi2006-dotcom/TEAM_1_FirmDataHub.git) |
 
 ---
@@ -20,7 +20,7 @@
 |-----------|------------|------|------------------|-----------------------|
 | Đỗ Phạm Hà Chi | 11245851 | Lead, Data Collection, Database Design, Pipeline Enhancement | 30% | As the team lead, responsible for overall project coordination, data collection, and database schema design. Enhanced `run_pipeline.py` to automate the entire ETL workflow. Participated in the development of all ETL modules including `import_firms.py`, `create_snapshot.py`, `import_panel.py`, `qc_checks.py`, and `export_panel.py`. |
 | Trần Phương Linh | 11223797 | Data Collection, Snapshot Management, SQL Schema, Pipeline Refinement | 24% | Contributed to data collection and refinement of `create_snapshot.py` to ensure proper versioning and snapshot tracking. Assisted in designing and refining `schema_and_seed.sql` for database structure. Enhanced `run_pipeline.py` for improved workflow execution. |
-| Nguyễn Thị Dương | 11245866 | Data Collection, View Development, Quality Control | 23.3% | Focused on data collection and validation. Developed and refined database views (including `vw_firm_panel_latest`) to support analytical queries. Enhanced `qc_checks.py` by implementing 15 comprehensive data quality rules and generating quality reports. |
+| Nguyễn Thị Dương | 11245866 | Data Collection, View Development, Quality Control, Export Enhancement | 23.3% | Focused on data collection and validation. Developed and refined database views (including `vw_firm_panel_latest`) to support analytical queries. Enhanced `qc_checks.py` by implementing 15 comprehensive data quality rules and generating quality reports. Improved `export_panel.py` to log value overrides via `fact_value_override_log` — whenever a re-import changes an existing value, the old and new values are recorded with timestamp and source, enabling full audit trail of data corrections across pipeline runs. |
 | Trần Thị Nhật Khánh | 11245886 | Data Collection, Snapshot Management | 22.7% | Responsible for data collection and validation. Contributed to the development and refinement of `create_snapshot.py`, ensuring proper snapshot creation and linkage with data sources. Supported versioning implementation across the pipeline. |
 | **Total** | | | **100%** | |
 
@@ -173,6 +173,7 @@ LIMIT 10;
 
 ## Data Notes
 - **Currency unit**: billion VND (VND × 10⁹) in exported CSV; DB stores raw VND (unit_scale = 1,000,000,000)
+- **Restatement policy**: Several companies had prior-year figures restated in subsequent annual reports (e.g. a figure reported in the 2021 BCTC may differ from the same figure as restated in the 2022 BCTC). Where restatements were identified, the **originally reported figure for that fiscal year** was retained rather than the restated version, to maintain consistency with the year-specific filing. This follows standard practice in empirical finance research on Vietnamese listed companies.
 - **Ownership**: decimal ratio 0–1 (e.g. 5% = 0.05)
 - **growth_ratio**: computed as (net_sales_t − net_sales_t-1) / net_sales_t-1; year 2020 uses 2019 comparative figures from the 2020 audited financial statements
 - **dividend_cash_paid**: recorded as negative values following Vietnamese cash flow statement convention (cash outflows shown in parentheses); the absolute value represents actual dividends paid to shareholders
